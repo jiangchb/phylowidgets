@@ -42,7 +42,7 @@ def clean_singletree(fin):
             line = strip_support(line)
         line = re.sub("\[", "", line)
         line = re.sub("\]", "", line)
-        clean += line + "\n"
+        clean += line
     return clean
 
 
