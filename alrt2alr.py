@@ -20,9 +20,11 @@ import math,re,sys,os
 fin = open(sys.argv[1], "r")
 newline = ""
 for line in fin.readlines():
+    print line
     tokens = line.split(":")
     for t in tokens:
         if t.__contains__(")") and False == t.__contains__(";"):
+            print t
             ts = t.split(")")
             newline += ts[0] + ")"
             alrt = float(ts[1])

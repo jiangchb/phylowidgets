@@ -22,6 +22,9 @@ import os, sys, re
 from argParser import *
 ap = ArgParser(sys.argv)
 
+v = ap.getOptionalToggle("--verbose")
+if v != False:
+    v = True
 fastapath = ap.getArg("--fastapath")
 seedseq = ap.getOptionalArg("--seed")
 cthresh = ap.getOptionalArg("--cthreshold") # sites with N indels >= this value will be culled.
@@ -80,10 +83,10 @@ def trim_nonseed_sites(taxa_seq, seedseq):
                 taxa_newseq[taxa] += taxa_seq[taxa][site]
     return taxa_newseq
 
-def trim_indel_sites(taxa_seq, cthresh):
+def trim_indel_sites(taxa_seq, cthresh, verbose=False):
     #print "84", taxa_seq
     taxa_newseq = {}
-    if False != ap.getOptionalToggle("--verbose"):
+    if verbose:
         print "\n. Culling indel-rich sites from", fastapath
     for taxa in taxa_seq:
         taxa_newseq[taxa] = ""
@@ -95,10 +98,10 @@ def trim_indel_sites(taxa_seq, cthresh):
                 count_indels += 1
         cprop = float(count_indels) / taxa_seq.keys().__len__()
         if cprop >= cthresh:
-            if False != ap.getOptionalToggle("--verbose"):
+            if verbose:
                 print "--> Culling site", site, "with %.2f"%cprop,"indels."
         else:
-            if False != ap.getOptionalToggle("--verbose"):
+            if verbose:
                 print "--> Keeping site", site, "with %.2f"%cprop,"indels."
             for taxa in taxa_seq:
                 taxa_newseq[taxa] += taxa_seq[taxa][site]         
@@ -111,15 +114,15 @@ def trim_indel_sites(taxa_seq, cthresh):
     #print "108", taxa_newseq
     return taxa_newseq
 
-def trim_taxa(taxa_seq, indel_max):
+def trim_taxa(taxa_seq, indel_max, verbose=False):
     taxa_newseq = {}
-    if False != ap.getOptionalToggle("--verbose"):
+    if verbose:
         print "\n. Culling indel-rich sequences from", fastapath
     for taxa in taxa_seq:
         count = taxa_seq[taxa].count("-")
         p = float(count) / taxa_seq[taxa].__len__()
         if p >= indel_max:
-            if False != ap.getOptionalToggle("--verbose"):
+            if verbose:
                 print "--> Removing", taxa, "with %.1f"%(p * 100), "% indels."
         else:
             taxa_newseq[taxa] = taxa_seq[taxa]
@@ -168,10 +171,16 @@ if ap.getOptionalToggle("--auto_thresh"):
                 cthresh = c - cstep
                 print ". Setting per-site conservation threshold to", cthresh
                 c = cthresh + 1
+        if c == float(cthresh):
+            print ". Setting per-site conservation threshold to", c
+            print ". The search for an optimal threshold stopped early because you specified"
+            print "  the upper limit to be", cthresh, "using the --cthreshold command."
+
 
 c = float(cthresh)
-taxa_newseq = trim_indel_sites(taxa_seq, c )
-taxa_newseq = trim_taxa(taxa_newseq, float(indel_max))
+
+taxa_newseq = trim_indel_sites(taxa_seq, c, verbose=v)
+taxa_newseq = trim_taxa(taxa_newseq, float(indel_max), verbose=v)
 x = get_stats_taxa_seq(taxa_newseq)
 print "\n. Writing", x[0], "taxa with", x[1], "sites."
 write_fasta(taxa_newseq)
