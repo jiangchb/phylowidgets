@@ -76,3 +76,21 @@ class ArgParser:
 		else:
 			return False
 	
+	def doesContainArg(self, flag):
+		return self.args.__contains__(flag)
+
+	def getOptionalList(self, flag, type=str):
+		#print self.args, flag
+		if self.args.__contains__(flag):
+			i = self.args.index(flag)
+			returnList = []
+			flagPattern = re.compile("^\-\-.*")
+			for j in range( i+1, self.args.__len__() ):
+				if re.match(flagPattern, self.args[j] ):
+					return returnList
+				else:
+					returnList.append( type(self.args[j]) )
+			return returnList
+		else:
+			return None
+	

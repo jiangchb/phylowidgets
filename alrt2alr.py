@@ -9,7 +9,7 @@
 # branch labels.
 #
 # USAGE: 
-#     python clean_trees.py FILEIN FILEOUT
+#     python clean_trees.py FILEIN > FILEOUT
 #
 # . . .where FILEIN is a text file containing one or more Newick-formatted trees,
 # with one tree on each line.  FILEOUT is the desired output filename.  
@@ -20,18 +20,18 @@ import math,re,sys,os
 fin = open(sys.argv[1], "r")
 newline = ""
 for line in fin.readlines():
-    print line
+    #print line
     tokens = line.split(":")
     for t in tokens:
         if t.__contains__(")") and False == t.__contains__(";"):
-            print t
+            #print t
             ts = t.split(")")
             newline += ts[0] + ")"
             alrt = float(ts[1])
             if alrt > 1418:
                 alrt = 1418.0
             alr = math.exp(alrt/2.0)
-            print alr
+            #print alr
             #newline += alr.__str__()
             newline += "%.4e"%alr
             newline += ":"

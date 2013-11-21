@@ -44,7 +44,7 @@ ap = ArgParser(sys.argv)
 #
 # Point to necessary software. . .
 #
-RUNLAZARUS = "python /Users/victor/Documents/EclipseWork/Lazarus/lazarus_batch.py"
+RUNLAZARUS = "python /Users/victor/Documents/SourceCode/Lazarus/lazarus.py"
 SEQGEN = "~/Applications/Seq-Gen.v1.3.2/source/seq-gen"
 
 mltreepath = ap.getArg("--treepath")
@@ -85,12 +85,14 @@ def binForProb(p):
 # return the P value of the floor of this bin
 def probForBin(b):
     x = float(b*5) / float(100)
-    if x == 1.00:
-        return x
+    return x
+    
+    #if x == 1.00:
+    #    return x
     
     # Correct the X mark location
     # For example, the bin with X range 0.050 to 0.100 needs to be plotted at 0.075
-    return x + 0.025
+    #return x #+ 0.025
 
 def getRepName(rep):
     repName = "rep-" + rep.__str__()
@@ -224,6 +226,7 @@ def plotPPvsACCAll():
                 l = l.strip()
                 tokens = l.split()
                 truesequence = tokens[1]
+                print "227:", truesequence
         f.close()
         if os.path.exists(dir + "/ancestor-ml.dat") == False:
             print "ERROR! I cannot find " + dir + "/ancestor-ml.dat"
@@ -250,6 +253,10 @@ def plotPPvsACCAll():
     
     print "mlppbins:", mlppbins
     
+    plotdir = workspaceDirectory + "/PLOTS"
+    if os.path.exists(plotdir) == False:
+        os.system("mkdir " + plotdir)
+    
     #
     # Plot the number of points in each bin
     #
@@ -258,7 +265,7 @@ def plotPPvsACCAll():
         data[i] = mlccbins[i] / (float(ap.getArg("--nreps"))*float(ap.getArg("--seqlen")))
         if data[i] == 0.0:
             data[i] = 0.0001
-    barplot2(data, "bin", "size of bin", "binsize")
+    barplot2(data, "ASR probability", "Proportion of Sites", "binsize")
     
     
     #
@@ -289,12 +296,6 @@ def plotPPvsACCAll():
     node = "ALL"
     seqgennode = "ALL"
 
-    #
-    # Finally, plot the results in CRAN:
-    #
-    plotdir = workspaceDirectory + "/PLOTS"
-    if os.path.exists(plotdir) == False:
-        os.system("mkdir " + plotdir)
 
     
     # create a CRAN script:
@@ -318,7 +319,7 @@ def plotPPvsACCAll():
 
 
     f.write("pdf(\"" + plotdir + "/ppacc.all.pdf" + "\", height=4, width=4) \n")
-    f.write("plot(mlx, mly, xlab=\"ASR posterior probability, in 5% bins\", ylab=\"proportion of correct inferences in the bin\", xlim=c(0.0, 1.0), ylim=c(0.0, 1.0), pch=20,cex=2, col=\"red\")\n")  
+    f.write("plot(mlx, mly, xlab=\"ASR probability\", ylab=\"Proportion of Correct Inferences\", xlim=c(0.0, 1.0), ylim=c(0.0, 1.0), pch=20,cex=2, col=\"red\")\n")  
     f.write("abline(a=0.0, b=1)\n")
     f.write("dev.off()\n")
     f.close()
@@ -368,12 +369,6 @@ def barplot2(data, xlab, ylab, filekeyword):
     fout = open(tablepath, "w")
     for p in pointsets:
         if p != finalset:
-            fout.write(p.__str__() + "\t")
-        else:
-            fout.write(p.__str__() )
-    fout.write("\n")
-    for p in pointsets:
-        if p != finalset:
             fout.write( data[p].__str__() + "\t")
         else:
             fout.write( data[p].__str__() )            
@@ -381,9 +376,21 @@ def barplot2(data, xlab, ylab, filekeyword):
     fout.close()
     pdfpath = plotdir + "/barplot2.pdf"
     cranstr = "pdf(\"" + pdfpath + "\", height=4, width=4)\n"    
-    cranstr += "bars <- read.table(\"" + tablepath + "\", header=T, sep=\"\\t\")\n"
+    cranstr += "bars <- read.table(\"" + tablepath + "\", header=F, sep=\"\\t\")\n"
+    cranstr += "barx = barplot(as.matrix(bars),axes = FALSE, axisnames = FALSE, beside=TRUE, col=c(\"red\"), xlab=\"" + xlab + "\", ylab=\"" + ylab + "\");\n"
     
-    cranstr += "barx = barplot(as.matrix(bars), beside=TRUE, col=c(\"red\"), xlab=\"" + xlab + "\", ylab=\"" + ylab + "\");\n"
+    xlabels = "labels <- c("
+    for p in pointsets:
+        if p == 20:
+            xlabels += "\"" + probForBin(p).__str__() + "\","
+        else:
+            xlabels += "\"" + probForBin(p).__str__() + " - " + (probForBin(p)+0.05).__str__() + "\","
+    xlabels = re.sub(",$", "", xlabels)
+    #cranstr += "labels <- paste(\"This is bar #\", 1:16, sep ='');\n"
+    cranstr += xlabels + ");\n"
+    cranstr += "text(barx, par(\"usr\")[3], labels = labels, srt = 45, adj = 1.15, cex = 0.5,xpd = TRUE);\n"
+    cranstr += "axis(2);\n"
+    
     cranpath = plotdir + "/barplot2.cran"
     fout = open(cranpath, "w")
     fout.write( cranstr )
@@ -472,10 +479,11 @@ def reportError():
 # 5. plot the results
 #
 ########################################
-buildOutputDirectory()
-runSeqGen()
-getExtantFromSeqGen()
-runLazarus()
+if False == ap.getOptionalToggle("--skip_asr"):
+    buildOutputDirectory()
+    runSeqGen()
+    getExtantFromSeqGen()
+    runLazarus()
 print "\n. Retrieving ancestors. . ."
 getAncestors()
 plotPPvsACCAll()

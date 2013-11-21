@@ -1,18 +1,70 @@
+#################################################
 #
 # USAGE:
 #
 # python compare_asr_dat_files.py [<id> <dat filepath> . . .]
 #
-# CREATES THESE FILES:
-unaligned_fasta_path = "ancestors.unaligned.fasta"
-#
 
 import os
 import sys
 import re
+from map_anc_2_anc import *
+from argParser import ArgParser
+ap = ArgParser(sys.argv)
 
-def getprobs(inpath):
-    fin = open(inpath, "r")
+anc1 = ap.getArg("--anc1")
+nick1 = ap.getArg("--nick1")
+msa1 = ap.getArg("--msa1")
+seed1 = ap.getArg("--seed1")
+
+anc2 = ap.getArg("--anc2")
+nick2 = ap.getArg("--nick2")
+msa2 = ap.getArg("--msa2")
+seed2 = ap.getArg("--seed2")
+
+runid = ap.getOptionalArg("--runid")
+if runid == False:
+    exit()
+
+rsitesa = []
+x = ap.getOptionalList("--restrict_sites_1")
+if x != None:
+    for s in x:
+        rsitesa.append( int(s) )
+rsitesb = []
+x = ap.getOptionalList("--restrict_sites_2")
+if x != None:
+    for s in x:
+        rsitesb.append( int(s) )
+        
+colors = ["blue", "red", "orange", "green", "black"]
+names = ["indel change", "case 1", "case 2", "case 3", "no change"]
+
+########################################################
+#
+# Do the paths exist?
+
+if False == os.path.exists( anc1 ):
+    print "\n\nERROR: the following path does not seem to exist:", anc1
+    exit()
+if False == os.path.exists( anc2 ):
+    print "\n\nERROR: the following path does not seem to exist:", anc2
+    exit()
+if False == os.path.exists( msa1 ):
+    print "\n\nERROR: the following path does not seem to exist:", msa1
+    exit()
+if False == os.path.exists( msa2 ):
+    print "\n\nERROR: the following path does not seem to exist:", msa2
+    exit()
+
+#############################################################
+
+#
+# Function defs. go here. . .
+#
+def getprobs(ancpath, rsites):
+    """Returns site_states_probs"""
+    fin = open(ancpath, "r")
     lines = fin.readlines()
     fin.close()
 
@@ -20,46 +72,26 @@ def getprobs(inpath):
     for l in lines:
         tokens = l.split()
         site = int(tokens[0])
-        site_states_probs[ site ] = {}
-        i = 1
-        while i < tokens.__len__():
-            s = tokens[i]
-            p = float(tokens[i+1])
-            foundgap = False
-            if p > 1.0:
-                p = 1.0
-                foundgap = True
-            site_states_probs[site][s] = p
-            i += 2
-            if foundgap:
-                i = tokens.__len__() # stop early
+        if site not in rsites:
+            continue
+        
+        # does this site contain a gap?
+        if l.__contains__("-"):
+            #print "75: I found a gap at site", site
+            site_states_probs[ site ] = {}
+            site_states_probs[site]["-"] = 0.0
+        elif site not in rsites:
+            continue
+        else:
+            site_states_probs[ site ] = {}
+            i = 1
+            while i < tokens.__len__():
+                s = tokens[i]
+                p = float(tokens[i+1])
+                site_states_probs[site][s] = p
+                i += 2
+        
     return site_states_probs
-    
-#
-# Capture command-line parameters
-#
-dat_files = {} # key = unique name, value = path to .dat file
-i = 1
-while i < sys.argv.__len__():
-    name = sys.argv[i]
-    i += 1
-    path = sys.argv[i]
-    dat_files[name] = path
-    if False == os.path.exists( path ):
-        print "\n\nERROR: the following path does not seem to exist:", path
-        exit()
-    i += 1
-    print "I found a file:", path, "with ID", name
-
-# sanity check:
-#if (i <= 2):
-#    print "\n\n! ERROR: Hey, you need to specify at least two *.dat files"
-#    exit()
-    
-# parse DAT files:
-anc_data = {}
-for anc in dat_files.keys():
-    anc_data[anc] = getprobs( dat_files[anc] )
 
 #
 def get_ml_state(states_probs):
@@ -73,98 +105,356 @@ def get_ml_state(states_probs):
             maxp = states_probs[state]
             maxc = state
     return maxc
+    
+def renumber_sites(site_states_probs):
+    sites = site_states_probs.keys()
+    sites.sort()
+    
+    ret = {}
+    for ii in range(0,sites.__len__() ):
+        ret[ii+1] = site_states_probs[ sites[ii] ]    
 
-# compare dat files:
-countindel = 0
-countred = 0 # different states
-countorange = 0 # diff. states, but pairwise secondary states
-countgreen = 0 # same state, but adds uncertainty
+    return ret
+
+##########################################################
+
+#
+# "main" begins here. . .
+#
+
+# Generate a site map between the two ancestors
+t = build_tuples(seed1, msa1, anc1, seed2, msa2, anc2)
+
+#print t[0]
+#print t[1]
+#exit()
+
+ra = []
+rb = []
+for ii in t:
+    if ii[0] in rsitesa and ii[1] in rsitesb:
+        ra.append(ii[0])
+        rb.append(ii[1])
+
+anc_data = {}
+anc_data[nick1] = getprobs( anc1, ra )
+anc_data[nick2] = getprobs( anc2, rb )
+
+#
+# Remove sites where both ancestors have "-"
+#
+for ii in t:
+    if ii[0] in rsitesa and ii[1] in rsitesb:
+        if anc_data[nick1][ ii[0] ].__contains__("-") and anc_data[nick2][ ii[1] ].__contains__("-"):
+            print "Removing tuple", ii
+            anc_data[nick1].__delitem__(ii[0])
+            anc_data[nick2].__delitem__(ii[1])
+        else:
+            pass
+
+nsites = anc_data[ nick1 ].__len__()
+
+#
+# Write a brief summary of the two ancestors
+#
+fout = open(runid + ".summary.txt", "w")
+fout.write( "Comparing " + msa1 + " (" + nick1 + ") ")
+fout.write("to " + msa2 + " (" + nick2 + ")\n")
+fout.write("-------------------------------------------------------\n")
+
+sum1 = 0
+sum2 = 0
+
+outl = ""
+for ii in t:
+    if ii[0] in anc_data[ nick1 ] and ii[1] in anc_data[ nick2 ]:
+        state1 = get_ml_state( anc_data[ nick1 ][ii[0]] )
+        state2 = get_ml_state( anc_data[ nick2 ][ii[1]] )
+        sum1 += anc_data[ nick1 ][ii[0]][state1]
+        sum2 += anc_data[ nick2 ][ii[1]][state2]
+        outl += nick1 + ":" + ii[0].__str__() + "\t" + state1 + " (" + anc_data[ nick1 ][ii[0]][state1].__str__() + ")"
+        outl += "\t\t" + nick2 + "\t" + ii[1].__str__() + "\t" + state2 + " (" + anc_data[ nick2 ][ii[1]][state2].__str__() + ")"
+        if state1 != state2:
+            outl += "\t\t"
+            if state1 == "-" or state2 == "-":
+                outl += "(indel)"
+            elif anc_data[ nick1 ][ii[0]][state2] < 0.05 and anc_data[ nick2 ][ii[1]][state1] < 0.05:
+                outl += "(case 1)"
+            else:
+                outl += "(case 2)"
+            #elif anc_data[ nick1 ][ii[0]][state1] >= 0.8 and anc_data[ nick2 ][ii[1]][state2] < 0.8:
+            #    outl += "(case 2)"
+            #elif anc_data[ nick1 ][ii[0]][state1] < 0.8 and anc_data[ nick2 ][ii[1]][state2] >= 0.8:
+            #    outl += "(case 2)"            
+        else:
+            outl += "\t"
+            if anc_data[ nick1 ][ii[0]][state1] < 0.8 and anc_data[ nick2 ][ii[1]][state2] >= 0.8:
+                outl += "(case 3)" 
+            elif anc_data[ nick1 ][ii[0]][state1] >= 0.8 and anc_data[ nick2 ][ii[1]][state2] < 0.8:
+                outl += "(case 3)" 
+        outl += "\n"
+
+fout.write("mean PP " + nick1 + " = %.3f"%(sum1/nsites) + "\n")
+fout.write("mean PP " + nick2 + " = %.3f"%(sum2/nsites) + "\n")
+fout.write("-------------------------------------------------------\n")
+fout.write(outl)
+fout.close()
+
+#
+# Renumber to 1-based site counting
+#
+anc_data[nick1] = renumber_sites( anc_data[nick1] )
+anc_data[nick2] = renumber_sites( anc_data[nick2] )
+
+
+#
+# Sanity Check!
+#
+if anc_data[nick1].__len__() != anc_data[nick2].__len__():
+    print "Ancestors have different lengths!"
+    for site in anc_data[ nick1 ].keys():
+        state1 = get_ml_state( anc_data[ nick1 ][site] )
+        state2 = get_ml_state( anc_data[ nick2 ][site] )
+        print site, state1, state2
+    exit()
+
+
+#
+# Now compare the distributions. . . 
+#
+
+indelsites = []
 redsites = []
 orangesites = []
 greensites = []
-nsites = anc_data[ anc_data.keys()[0] ].__len__()
+blacksites = []
+
 print "\n"
-for site in range(1, nsites+1):
+for site in anc_data[ nick1 ].keys():
     indel = False
     red = False
     orange = False
     green = False
-    compare_to_this_state = get_ml_state( anc_data[anc_data.keys()[0]][site] )
-    for anc in anc_data.keys():
-        this_ml_state = get_ml_state( anc_data[anc][site] )
-        # test for indel mismatch:
-        if this_ml_state != compare_to_this_state:
-            if this_ml_state == "-" or compare_to_this_state == "-":
-                indel = True
-        # test for red:
-        if this_ml_state != compare_to_this_state and indel == False:
-            if False == anc_data[anc][site].keys().__contains__(compare_to_this_state):
-                red = True
-            elif False == anc_data[ anc_data.keys()[0] ][site].keys().__contains__(this_ml_state):
-                red = True
-            elif anc_data[anc_data.keys()[0]][site][this_ml_state] < 0.05 and anc_data[anc][site][compare_to_this_state] < 0.05:
-                red = True
-        # test for orange:
-        if this_ml_state != compare_to_this_state and red == False and indel == False:
-            orange = True
-        # test for green
-        if this_ml_state == compare_to_this_state:
-            if (anc_data[anc][site][this_ml_state] < 0.8 and anc_data[anc_data.keys()[0]][site][this_ml_state] > 0.8) or (anc_data[anc][site][this_ml_state] > 0.8 and anc_data[anc_data.keys()[0]][site][this_ml_state] < 0.8):
-                green = True
+    state1 = get_ml_state( anc_data[ nick1 ][site] )
+    state2 = get_ml_state( anc_data[ nick2 ][site] )
+  
+    # test for indel mismatch:
+    if state2 != state1:
+        if state2 == "-" or state1 == "-":
+            indel = True
+    
+    # test for red:
+    if state2 != state1 and indel == False:
+        if False == anc_data[ nick2 ][site].keys().__contains__(state1):
+            red = True
+        elif False == anc_data[ nick1 ][site].keys().__contains__(state2):
+            red = True
+        elif anc_data[nick1][site][state2] < 0.05 and anc_data[nick2][site][state1] < 0.05:
+            red = True
+    
+    # test for orange:
+    if state2 != state1 and red == False and indel == False:
+        orange = True
+    
+    # test for green
+    if state2 == state1 and indel == False:
+        if (anc_data[nick1][site][state1] < 0.8 and anc_data[nick2][site][state2] > 0.8) or (anc_data[nick1][site][state1] > 0.8 and anc_data[nick2][site][state2] < 0.8):
+            green = True
+    
     if indel:
-        countindel += 1
+        indelsites.append(site)
     if red:
-        countred += 1
         redsites.append(site)
-        print "site", site, " - case 1"
-        print "\t",get_ml_state( anc_data[anc_data.keys()[0]][site] ), anc_data[anc_data.keys()[0]][site]
-        print "\t",get_ml_state( anc_data[anc_data.keys()[1]][site] ), anc_data[anc_data.keys()[1]][site]
     if orange:
-        countorange +=1
         orangesites.append(site)
-        print "site", site, " - case 2"
-        print "\t", get_ml_state( anc_data[anc_data.keys()[0]][site] ), anc_data[anc_data.keys()[0]][site]
-        print "\t",get_ml_state( anc_data[anc_data.keys()[1]][site] ), anc_data[anc_data.keys()[1]][site]
     if green:
-        countgreen += 1
         greensites.append(site)
-        print "site", site, " - case 3"
-        print "\t",get_ml_state( anc_data[anc_data.keys()[0]][site] ), anc_data[anc_data.keys()[0]][site]
-        print "\t",get_ml_state( anc_data[anc_data.keys()[1]][site] ), anc_data[anc_data.keys()[1]][site]
-print "============================================================"
-print "Legend:"
-print "- case 1: sites with disagreeing ML states, and neither ancestral vector has strong support for the others' state."
-print "- case 2: sites with disagreeing ML states, but one or both of the ancestral vectors has PP < 0.05 for the others' ML state."
-print "- case 3: sites with the same ML state, but one of the ancestral vectors strongly supports (PP > 0.8) the state, while the other vector poorly supports (PP < 0.8) the state."
-print "============================================================"
-print "\n"
+    if indel == False and red == False and orange == False and green == False:
+        blacksites.append(site)
+
+
 
 print "============================================================"
-print "Summary:"
+print nick1 + " to " + nick2
 print "nsites=", nsites
-print "indel_mismatch=", countindel
-print "case 1=", countred, "sites: ",  redsites
-print "case 2=", countorange, "sites: ",  orangesites
-print "case 3=", countgreen, "sites: ", greensites
-print "============================================================"
-print "\n\n"
+print "indel_mismatch=", indelsites.__len__(), indelsites
+print "case 1:", redsites.__len__(), "sites:",  redsites
+print "case 2:", orangesites.__len__(), "sites:",  orangesites
+print "case 3:", greensites.__len__(), "sites:", greensites
+print "case 4:", blacksites.__len__(), "sites:", blacksites
+print ""
 
-"""
+
 #
-# Write a FASTA file with all the sequences
+# Plot scatterplot: orange, red, and green sites
 #
-fasta_sequences = {} # key = unique name, value = string with sequence
-for dat in dat_files:
-    fasta_sequences[dat] = ""
-    fin = open(dat_files[dat], "r")
-    for line in fin.readlines():
-        line = line.strip()
-        tokens = line.split()
-        fasta_sequences[ dat ] += tokens[1]
-    fin.close()
-fout = open(unaligned_fasta_path, "w")
-for f in fasta_sequences:
-    fout.write( ">" + f + "\n")
-    fout.write( fasta_sequences[f] + "\n" )
+
+ix = "ix<-c("
+iy = "iy<-c("
+rx = "rx<-c("
+ry = "ry<-c("
+ox = "ox<-c("
+oy = "oy<-c("
+gx = "gx<-c("
+gy = "gy<-c("
+bx = "bx<-c("
+by = "by<-c("
+
+for i in indelsites:
+    mlstate = get_ml_state( anc_data[nick1][i] )
+    pa = anc_data[nick1][i][mlstate]
+    mlstate = get_ml_state( anc_data[nick2][i] )
+    pb = anc_data[nick2][i][mlstate]    
+    ix += pa.__str__() + ","
+    iy += pb.__str__() + ","
+
+for s in redsites:
+    mlstate = get_ml_state( anc_data[nick1][s] )
+    pa = anc_data[nick1][s][mlstate]
+    mlstate = get_ml_state( anc_data[nick2][s] )
+    pb = anc_data[nick2][s][mlstate]    
+    rx += pa.__str__() + ","
+    ry += pb.__str__() + ","
+for s in orangesites:
+    mlstate = get_ml_state( anc_data[nick1][s] )
+    pa = anc_data[nick1][s][mlstate]
+    mlstate = get_ml_state( anc_data[nick2][s] )
+    pb = anc_data[nick2][s][mlstate]    
+    ox += pa.__str__() + ","
+    oy += pb.__str__() + ","
+for s in greensites:
+    mlstate = get_ml_state( anc_data[nick1][s] )
+    pa = anc_data[nick1][s][mlstate]
+    mlstate = get_ml_state( anc_data[nick2][s] )
+    pb = anc_data[nick2][s][mlstate]    
+    gx += pa.__str__() + ","
+    gy += pb.__str__() + ","
+for s in blacksites: # black and green get plotted in the same bin
+    mlstate = get_ml_state( anc_data[nick1][s] )
+    pa = anc_data[nick1][s][mlstate]
+    mlstate = get_ml_state( anc_data[nick2][s] )
+    pb = anc_data[nick2][s][mlstate]    
+    bx += pa.__str__() + ","
+    by += pb.__str__() + ","
+
+    
+rx = re.sub(",$", "", rx)
+rx += ");\n"
+ry = re.sub(",$", "", ry)
+ry += ");\n"
+ox = re.sub(",$", "", ox)
+ox += ");\n"
+oy = re.sub(",$", "", oy)
+oy += ");\n"
+gx = re.sub(",$", "", gx)
+gx += ");\n"
+
+gy = re.sub(",$", "", gy)
+gy += ");\n"
+
+bx = re.sub(",$", "", bx)
+bx += ");\n"
+
+by = re.sub(",$", "", by)
+by += ");\n"
+
+ix = re.sub(",$", "", ix)
+ix += ");\n"
+
+iy = re.sub(",$", "", iy)
+iy += ");\n"
+
+cranstr = "colors <-c("
+for c in colors:
+    cranstr += "\""  + c.__str__() + "\","
+cranstr = re.sub(",$", "", cranstr)
+cranstr += ");\n"
+
+
+#names = ["indel change", "case 1", "case 2", "case 3", "no change"]
+cranstr += "n <-c("
+cranstr += "\"indel change (" + indelsites.__len__().__str__() + ")\","
+cranstr += "\"case 1 (" + redsites.__len__().__str__() + ")\","
+cranstr += "\"case 2 (" + orangesites.__len__().__str__() + ")\","
+cranstr += "\"case 3 (" + greensites.__len__().__str__() + ")\","
+cranstr += "\"no change (" + blacksites.__len__().__str__() + ")\");\n"
+
+fout = open(runid + ".scatter.rscript", "w")
+cranstr += "pdf(\"" + runid + ".scatter.pdf\", width=4, height=4);\n" 
+fout.write(cranstr)
+
+fout.write("plot(c(0.0,1.0),c(0.0,1.0),type='n',xlim=range(0,1.0),ylim=range(0,1.0),xlab=\"" + nick1 + " PPs\",ylab=\"" + nick2 + " PPs\",main=\"" + runid + "\");\n")
+fout.write(rx)
+fout.write(ry)
+fout.write(ox)
+fout.write(oy)
+fout.write(gx)
+fout.write(gy)
+fout.write(bx)
+fout.write(by)
+fout.write(ix)
+fout.write(iy)
+fout.write("rect(0.8,0.8,1.0,1.0,lty=\"blank\",col=\"lightyellow\");\n")
+fout.write("points(bx,by,col='black',pch=1);\n")
+fout.write("points(ix,iy,col='blue',pch=2);\n")
+fout.write("points(gx,gy,col='green',pch=5);\n")
+fout.write("points(ox,oy,col='orange',pch=20);\n")
+fout.write("points(rx,ry,col='red',pch=18);\n")
+fout.write("abline(0,1.0,col='black',lwd=0.5,lty=\"dashed\");\n")
+
+fout.write("legend(0.1,1.0,n,col=colors,pch=c(2,18,20,5,1),pt.cex=0.5,cex=0.5,box.lwd=0.5,box.lty=\"dashed\");\n")
+fout.write("dev.off();\n")
+
 fout.close()
-"""
+os.system("r --no-save < " + runid + ".scatter.rscript")
+
+
+#
+# Plot histogram: proportion of orange, red, and green sites, relative to total
+#
+
+#
+# data[xgroup][series] = value
+#
+def pieplot(bars, names, colors, xlab, ylab, filekeyword):
+                
+    pdfpath = filekeyword + ".pie.pdf"
+    #cranstr = "pdf(\"" + pdfpath + "\", width=6, height=3);\n"    
+    cranstr = "pdf(\"" + pdfpath + "\", width=6, height=6);\n"
+    
+    cranstr += "y <-c("
+    for b in bars:
+        cranstr += b.__str__() + ","
+    cranstr = re.sub(",$", "", cranstr)
+    cranstr += ");\n"
+    
+    cranstr += "colors <-c("
+    for c in colors:
+        cranstr += "\""  + c.__str__() + "\","
+    cranstr = re.sub(",$", "", cranstr)
+    cranstr += ");\n"
+
+    cranstr += "n <-c("
+    for n in names:
+        cranstr += "\"" + n.__str__() + "\","
+    cranstr = re.sub(",$", "", cranstr)
+    cranstr += ");\n"  
+
+    cranstr += "pie(y, labels=n, col=colors, main=\"" + filekeyword + "\");\n"    
+    cranstr += "dev.off();\n"  
+
+    fout = open(filekeyword + ".pie.rscript", "w")
+    fout.write( cranstr )
+    fout.close()
+    
+    os.system("r --no-save < " + filekeyword + ".pie.rscript")
+
+bd = []
+nsites = 1.0
+bd.append( float(indelsites.__len__()) / nsites )
+bd.append( float(redsites.__len__()) / nsites )
+bd.append( float(orangesites.__len__()) / nsites )
+bd.append( float(greensites.__len__()) / nsites )
+bd.append( float(blacksites.__len__()) / nsites )
+pieplot(bd,names,colors,"Sets", "Proportion of Sites", runid)
+

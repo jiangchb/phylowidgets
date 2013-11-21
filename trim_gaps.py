@@ -160,7 +160,7 @@ if ap.getOptionalToggle("--auto_thresh"):
             taxa_newseq = trim_indel_sites(taxa_seq, c )
             if taxa_newseq == None:
                 continue
-            #print taxa_newseq
+            print taxa_newseq
             taxa_newseq = trim_taxa(taxa_newseq, float(indel_max))
             x = get_stats_taxa_seq(taxa_newseq)
             print c, x[0], x[1], x[2], x[3], "%.3f"%(float(x[2])/x[3])

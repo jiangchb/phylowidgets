@@ -58,18 +58,23 @@ def var(set):
 def stderr(set):
     return (sd(set) / math.sqrt( set.__len__() ) )
 
-def get_bls(inpath):
-    bls = []
+
+def read_data(inpath):
     fin = open(inpath, "r")
-    for l in fin.readlines():
-        if l.__len__() > 4 and False == l.startswith("#"):
+
+    lines = fin.readlines()
+    nsets = lines[0].split().__len__()
+    
+    set_data = {}
+    for i in range(0, nsets):
+        set_data[i] = []
+    
+    for l in lines:
+        if l.__len__() > 5:
             tokens = l.split()
-            bl = float(tokens[ tokens.__len__()-3 ])
-            if bl < 1.0:
-                print l
-            bls.append(bl)
-    fin.close()
-    return bls
+            for i in range(0, nsets):
+                set_data[i].append( float(tokens[i]) )
+    return set_data
 
 def stats_about_bls(path, bls):
     # calculate mean
@@ -86,27 +91,28 @@ def stats_about_bls(path, bls):
     
     print path, "mean=", mean_str, "median=", median_str, "sem=", stderr(bls)
 
-bls = get_bls(inpath)
-print "bls=", bls
+data = read_data(inpath)
+
 #
 # returns a hashtable, key = bin numbers, rounded to the nearest 0.01, value = proportion of total branches in that bin
 #
-minbl = bls[0]
-for b in bls:
-    if b < minbl:
-        minbl = b
-maxbl = bls[0]
-for b in bls:
-    if b > maxbl:
-        maxbl = b
+maxval = None
+minval = None
+for set in data:
+    if maxval == None:
+        maxval = max(data[set])
+    if max(data[set]) > maxval:
+        maxval = max(data[set])
+    if minval == None:
+        minval = min(data[set])
+    if min(data[set]) < minval:
+        minval = min(data[set])
 
-#MAX_BIN_LENGTH = float("%.5f"%maxbl)
-#MIN_BIN_LENGTH = float("%.5f"%minbl)
-#BIN_SIZE = (MAX_BIN_LENGTH - MIN_BIN_LENGTH) / 20
-#MAX_BIN_LENGTH += BIN_SIZE
-#MIN_BIN_LENGTH -= BIN_SIZE
-
-
+MAX_BIN_LENGTH = float("%.5f"%maxval)
+MIN_BIN_LENGTH = float("%.5f"%minval)
+BIN_SIZE = (MAX_BIN_LENGTH - MIN_BIN_LENGTH) / 20
+MAX_BIN_LENGTH += BIN_SIZE
+MIN_BIN_LENGTH -= BIN_SIZE
 
 print MIN_BIN_LENGTH, MAX_BIN_LENGTH, BIN_SIZE
 
@@ -188,6 +194,7 @@ def barplot1(data, xlab, ylab, filekeyword):
 #
 # Fill the bins with data
 #
-bins = calculate_bins( bls )
-print "bins=", bins
-barplot1(bins, "bins", "proportion", "histogram")
+for set in data:
+    bins = calculate_bins( data[set] )
+    print "bins=", bins
+    barplot1(bins, "bins", "proportion", "histogram" + set.__str__())

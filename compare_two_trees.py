@@ -10,8 +10,6 @@ t1.read_from_path(t1path, "newick")
 t2 = Tree()
 t2.read_from_path(t2path, "newick")
 
-t1
-
 
 s = t1.symmetric_difference(t2)
 s = t2.symmetric_difference(t1)

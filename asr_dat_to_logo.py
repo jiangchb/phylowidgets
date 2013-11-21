@@ -822,7 +822,12 @@ def write_single_stack(sitenum, data):
 datpath = ap.getArg("--datpath")
 probs = getprobs(datpath)
 probs = fill_missing_data(probs)
+rsites = None
 
+if ap.doesContainArg("--sites"):
+    rsites = ap.getList("--sites")
+    #for s in rsites:
+        
 if True == ap.getOptionalToggle("--printml"):
     print_ml_sequence(probs)
 

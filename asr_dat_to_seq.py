@@ -1,4 +1,11 @@
+#
+# USAGE:
+# python asr_dat_to_seq.py <ancestral dat file path>
+#
+
 import sys, os
+
+dat_to_seed = {} # key = site number in dat sequence (includes indels), value = site number in seed sequence
 
 def getprobs(inpath):
     fin = open(inpath, "r")
@@ -43,6 +50,7 @@ def print_ml_sequence(site_states_probs):
         if maxc != "-":
             mlseq += maxc
     print mlseq
+    return mlseq
         
 
 
