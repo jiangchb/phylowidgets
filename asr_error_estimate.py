@@ -226,7 +226,7 @@ def plotPPvsACCAll():
                 l = l.strip()
                 tokens = l.split()
                 truesequence = tokens[1]
-                print "227:", truesequence
+                #print "227:", truesequence
         f.close()
         if os.path.exists(dir + "/ancestor-ml.dat") == False:
             print "ERROR! I cannot find " + dir + "/ancestor-ml.dat"
@@ -251,7 +251,7 @@ def plotPPvsACCAll():
             site += 1
         f.close()
     
-    print "mlppbins:", mlppbins
+    #print "mlppbins:", mlppbins
     
     plotdir = workspaceDirectory + "/PLOTS"
     if os.path.exists(plotdir) == False:
@@ -282,22 +282,28 @@ def plotPPvsACCAll():
         
         avgmlpp = float(sum(mlppbins[i])) / float(mlppbins[i].__len__())
         fractioncorrect = float(mlccbins[i]) / float(mlppbins[i].__len__())
-        mlpoints[avgmlpp] = fractioncorrect
-                 
+        mlpoints[avgmlpp] = fractioncorrect        
         averageml[i] = avgmlpp
-        
-        # walkthrough each inference in this bin
-        #for j in mlppbins[i]:
-        #    mlerrorindex += float(j - averageml[i] )**2
+
             
-    print "mlpoints:", mlpoints
-    print "averageml:", averageml
+    #print "mlpoints:", mlpoints
+    #print "averageml:", averageml
 
-    node = "ALL"
-    seqgennode = "ALL"
+    gerr = 0.0 # geometric error from ideal x=y data
+    for i in averageml:
+        actual = mlpoints[averageml[i]]
+        ideal = probForBin(i) + 0.025
+        if i == 21:
+            ideal = 1.0
+        gerr += abs(actual - ideal)
+    error = float(gerr/averageml.keys().__len__())
+    print "geo. error = ", error   
+    plotdir = workspaceDirectory + "/PLOTS"
+    f = open(plotdir + "/summary.pp.txt", "w")
+    f.write("geometric error of PP from y=x: " + error.__str__() + "\n")
+    f.close()
 
 
-    
     # create a CRAN script:
     f = open(plotdir + "/ppacc.all.cran", "w")
 
@@ -324,13 +330,12 @@ def plotPPvsACCAll():
     f.write("dev.off()\n")
     f.close()
     
-    os.system("r --save < " + plotdir + "/ppacc.all.cran > " + plotdir + "/ppacc.all.cran.log") 
+    os.system("r --no-save < " + plotdir + "/ppacc.all.cran > " + plotdir + "/ppacc.all.cran.log") 
 
 # returns:
 # bars: bars[data.keys()] = mean of data[i]
 # meanvals: meanvals = [bars[0], bars[1], ...]
 def prepare_data_for_barplot2( data ):
-    setid = "unimax vs. multimax"
     lengths = {}
     bars = {}
     meanvals = []
@@ -395,7 +400,7 @@ def barplot2(data, xlab, ylab, filekeyword):
     fout = open(cranpath, "w")
     fout.write( cranstr )
     fout.close()
-    os.system("r --no-save < " + cranpath)
+    os.system("r --no-save < " + cranpath + " > " + plotdir + "/barplot2.cran.log")
 
 
 #
@@ -462,11 +467,12 @@ def reportError():
     for i in rep_mlaccuracy:
         print "rep", i, "ML accuracy= %.2f"%rep_mlaccuracy[i]
     
-    print "\n. Results:"
-    print ". mean proportion of sites correctly inferred = ", calculateAverage( rep_mlaccuracy.values() )
-    print ". sem = ", (calculateStandardDeviation( rep_mlaccuracy.values() ) / math.sqrt( (float(ap.getArg("--nreps"))*float(ap.getArg("--seqlen"))) ) )
-    print ". std.dev. = ", calculateStandardDeviation( rep_mlaccuracy.values() )
-    print ". variance: ", calculateVariance(rep_mlaccuracy.values())
+    plotdir = workspaceDirectory + "/PLOTS"
+    f = open(plotdir + "/summary.txt", "w")
+    f.write("mean proportion of sites correctly inferred = " + calculateAverage(rep_mlaccuracy.values()).__str__() + "\n" )
+    f.write("s.d. proportion of sites correctly inferred = " + calculateStandardDeviation(rep_mlaccuracy.values()).__str__() + "\n" )       
+    f.close()
+
 
 ########################################
 #

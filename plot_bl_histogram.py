@@ -69,9 +69,12 @@ def get_bls(inpath):
     fin = open(inpath, "r")
     for l in fin.readlines():
         if l.__len__() > 1:
-            tokens = l.split()
-            for t in tokens:
-                bls.append( float(t) )
+            tokens = l.split(":")
+            for t in tokens[1:]:
+                bl = t.split(")")[0]
+                bl = bl.split(",")[0]
+                bl = float(bl)
+                bls.append( bl )
     fin.close()
     return bls
 
@@ -89,7 +92,6 @@ def stats_about_bls(path, bls):
     median_str = "%.3f"%median
     
     print path, "mean=", mean_str, "median=", median_str, "sem=", stderr(bls)
-
 
 bls = get_bls(inpath)
 #
@@ -198,5 +200,6 @@ def barplot1(data, xlab, ylab, filekeyword):
 #
 bins = calculate_bins( bls )
 barplot1(bins, "BL bins", "proportion", "bl_distribution" + id.__str__())
-
+print bls
+print bins
 

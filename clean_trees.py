@@ -4,7 +4,7 @@
 # Victor Hanson-Smith
 # victorhansonsmith@gmail.com
 #
-# This script will remove branch support values from a Newick-formatted tree.
+# This script will remove branch support values (e.g. bootstraps) from a Newick-formatted tree.
 # This is useful if you're using PAML, which seems to be unable to deal with
 # branch labels.
 #
